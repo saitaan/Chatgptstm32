@@ -1,0 +1,53 @@
+name: Upload ZIP - Build STM32 Firmware
+
+on:
+  push:
+    paths:
+      - "STM32_Firmware.zip"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract firmware ZIP
+        run: |
+          rm -rf firmware
+          mkdir firmware
+          unzip -q STM32_Firmware.zip -d firmware
+
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install STM32 core
+        run: |
+          arduino-cli config init
+          arduino-cli core update-index
+          arduino-cli core install STMicroelectronics:stm32
+
+      - name: Find Arduino sketch
+        run: |
+          echo "Searching for .ino file..."
+          find firmware -type f -name "*.ino" -print
+
+      - name: Compile STM32F103C8T6
+        run: |
+          SKETCH=$(find firmware -type f -name "*.ino" | head -n 1)
+          test -n "$SKETCH"
+          echo "Building: $SKETCH"
+
+          arduino-cli compile \
+            --fqbn STMicroelectronics:stm32:GenF1:pnum=BLUEPILL_F103C8 \
+            --output-dir build \
+            "$(dirname "$SKETCH")"
+
+      - name: Upload compiled firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: STM32-V16.5.9-firmware
+          path: build/*
+          if-no-files-found: error
